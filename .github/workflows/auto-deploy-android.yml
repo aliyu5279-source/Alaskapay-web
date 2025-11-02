@@ -1,0 +1,92 @@
+name: Auto Deploy Android
+
+on:
+  push:
+    tags:
+      - 'v*.*.*-android'
+      - 'android-v*.*.*'
+  workflow_dispatch:
+    inputs:
+      track:
+        description: 'Deployment track'
+        required: true
+        default: 'internal'
+        type: choice
+        options:
+          - internal
+          - beta
+          - production
+
+jobs:
+  auto-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build web app
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      
+      - name: Sync Capacitor
+        run: npx cap sync android
+      
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+          bundler-cache: true
+          working-directory: android
+      
+      - name: Install Fastlane
+        run: |
+          cd android
+          gem install fastlane
+      
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+      
+      - name: Deploy to Play Store
+        run: |
+          cd android
+          TRACK="${{ github.event.inputs.track }}"
+          if [ -z "$TRACK" ]; then
+            TRACK="internal"
+          fi
+          fastlane $TRACK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SUPPLY_JSON_KEY_DATA: ${{ secrets.PLAY_STORE_JSON_KEY }}
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-release
+          path: android/app/build/outputs/bundle/release/*.aab
+      
+      - name: Notify success
+        if: success()
+        run: |
+          echo "✅ Successfully deployed to Google Play!"
+          echo "Track: ${{ github.event.inputs.track || 'internal' }}"

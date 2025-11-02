@@ -1,0 +1,94 @@
+name: Performance Monitoring
+
+on:
+  push:
+    branches: [main, master]
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+
+jobs:
+  lighthouse:
+    name: Lighthouse Performance Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🏗️ Build project
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_PAYSTACK_PUBLIC_KEY: ${{ secrets.VITE_PAYSTACK_PUBLIC_KEY }}
+
+      - name: 🚀 Start server
+        run: |
+          npm install -g serve
+          serve -s dist -l 3000 &
+          sleep 5
+
+      - name: 🔍 Run Lighthouse
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          urls: |
+            http://localhost:3000
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
+      - name: 📊 Performance Report
+        run: |
+          echo "### 🚀 Performance Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Lighthouse audit completed successfully!" >> $GITHUB_STEP_SUMMARY
+
+  bundle-analysis:
+    name: Bundle Size Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🏗️ Build project
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_PAYSTACK_PUBLIC_KEY: ${{ secrets.VITE_PAYSTACK_PUBLIC_KEY }}
+
+      - name: 📊 Analyze bundle
+        run: |
+          echo "### 📦 Bundle Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          du -sh dist >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          find dist -type f -name "*.js" -exec du -h {} \; | sort -rh | head -10 >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: 📈 Upload bundle stats
+        uses: actions/upload-artifact@v3
+        with:
+          name: bundle-stats
+          path: dist/
+          retention-days: 30

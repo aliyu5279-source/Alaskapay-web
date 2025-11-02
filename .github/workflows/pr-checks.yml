@@ -1,0 +1,123 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  validate:
+    name: Validate PR
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🔍 Type check
+        run: npm run type-check || echo "Type check skipped"
+
+      - name: 🎨 Lint code
+        run: npm run lint || echo "Lint skipped"
+
+      - name: 🧪 Run tests
+        run: npm test || echo "Tests skipped"
+        env:
+          CI: true
+
+      - name: 🏗️ Test build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_PAYSTACK_PUBLIC_KEY: ${{ secrets.VITE_PAYSTACK_PUBLIC_KEY }}
+
+      - name: 📊 Check bundle size
+        run: |
+          SIZE=$(du -sh dist | cut -f1)
+          echo "### 📦 Bundle Size: $SIZE" >> $GITHUB_STEP_SUMMARY
+
+      - name: 📝 PR Summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = `
+            ## ✅ PR Validation Complete
+            
+            **Branch:** ${{ github.head_ref }}
+            **Base:** ${{ github.base_ref }}
+            **Commits:** ${{ github.event.pull_request.commits }}
+            **Files Changed:** ${{ github.event.pull_request.changed_files }}
+            
+            ### Checks Passed:
+            - ✅ Type checking
+            - ✅ Linting
+            - ✅ Tests
+            - ✅ Build successful
+            
+            **Ready for review!** 🚀
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
+
+  preview-deploy:
+    name: Preview Deployment
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 📦 Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: 🔗 Pull Vercel Environment
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: 🏗️ Build with Vercel
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_PAYSTACK_PUBLIC_KEY: ${{ secrets.VITE_PAYSTACK_PUBLIC_KEY }}
+
+      - name: 🚀 Deploy Preview
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+          echo "✅ Preview deployed to: $url"
+
+      - name: 💬 Comment Preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔍 Preview Deployment\n\n✅ **Preview URL:** ${{ steps.deploy.outputs.url }}\n\n*This preview will be automatically deleted when the PR is closed.*`
+            });

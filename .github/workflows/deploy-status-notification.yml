@@ -1,0 +1,44 @@
+name: Deployment Status Notification
+
+on:
+  workflow_run:
+    workflows: ["Auto Deploy to Netlify", "Auto Deploy to Vercel"]
+    types:
+      - completed
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check deployment status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflow = context.payload.workflow_run;
+            const status = workflow.conclusion;
+            const workflowName = workflow.name;
+            const branch = workflow.head_branch;
+            const commit = workflow.head_sha.substring(0, 7);
+            
+            let emoji = status === 'success' ? '✅' : '❌';
+            let message = `${emoji} **${workflowName}** ${status}\n\n`;
+            message += `📦 Branch: \`${branch}\`\n`;
+            message += `🔗 Commit: \`${commit}\`\n`;
+            message += `⏱️ Duration: ${Math.round((new Date(workflow.updated_at) - new Date(workflow.created_at)) / 1000)}s\n`;
+            message += `\n[View Workflow Run](${workflow.html_url})`;
+            
+            console.log(message);
+            
+            // Create a commit comment
+            if (workflow.head_commit) {
+              try {
+                await github.rest.repos.createCommitComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  commit_sha: workflow.head_sha,
+                  body: message
+                });
+              } catch (error) {
+                console.log('Could not create commit comment:', error.message);
+              }
+            }

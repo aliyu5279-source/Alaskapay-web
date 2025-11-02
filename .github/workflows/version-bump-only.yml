@@ -1,0 +1,71 @@
+name: Version Bump Only
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Bump version
+        run: |
+          npm version ${{ github.event.inputs.bump_type }} --no-git-tag-version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          BUILD_NUMBER=$(date +%s)
+          
+          # Update iOS
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $NEW_VERSION" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" ios/App/App/Info.plist
+          
+          # Update Android
+          cd android/app
+          sed -i "s/versionName \".*\"/versionName \"$NEW_VERSION\"/" build.gradle
+          sed -i "s/versionCode .*/versionCode $BUILD_NUMBER/" build.gradle
+          cd ../..
+          
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+          
+      - name: Commit and tag
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "chore: bump version to ${{ env.NEW_VERSION }} (build ${{ env.BUILD_NUMBER }})"
+          git tag "v${{ env.NEW_VERSION }}"
+          git push
+          git push --tags
+          
+      - name: Create release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ env.NEW_VERSION }}
+          release_name: Release v${{ env.NEW_VERSION }}
+          body: |
+            ## Version ${{ env.NEW_VERSION }}
+            Build: ${{ env.BUILD_NUMBER }}
+            
+            Changes in this release:
+            - Version bump (${{ github.event.inputs.bump_type }})
+          draft: false
+          prerelease: false

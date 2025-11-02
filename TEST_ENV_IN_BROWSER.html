@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alaska Pay - Environment Tester</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        .test-section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            margin: 5px 0;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.pending { background: #fff3cd; color: #856404; }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px 5px 10px 0;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .input-group {
+            margin: 15px 0;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 600;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .commission-info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #2196F3;
+        }
+        .commission-info strong {
+            color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Alaska Pay Environment Tester</h1>
+        <p class="subtitle">Test your environment variables and API connections</p>
+
+        <!-- Test 1: Environment Variables -->
+        <div class="test-section">
+            <h2>1. Environment Variables</h2>
+            <button onclick="testEnvVars()">Check Environment</button>
+            <div id="env-result"></div>
+        </div>
+
+        <!-- Test 2: Supabase Connection -->
+        <div class="test-section">
+            <h2>2. Supabase Connection</h2>
+            <button onclick="testSupabase()">Test Database</button>
+            <div id="supabase-result"></div>
+        </div>
+
+        <!-- Test 3: Commission Calculation -->
+        <div class="test-section">
+            <h2>3. Commission Calculator (1.5%)</h2>
+            <div class="commission-info">
+                <strong>Beneficiary:</strong> Alaska Mega Plus Ltd<br>
+                <strong>Bank:</strong> Taj Bank<br>
+                <strong>Account:</strong> 0013010127<br>
+                <strong>Rate:</strong> 1.5%
+            </div>
+            <div class="input-group">
+                <label>Transfer Amount (₦)</label>
+                <input type="number" id="transfer-amount" placeholder="1000" value="1000">
+            </div>
+            <button onclick="calculateCommission()">Calculate</button>
+            <div id="commission-result"></div>
+        </div>
+
+        <!-- Test 4: Paystack Test -->
+        <div class="test-section">
+            <h2>4. Paystack Integration</h2>
+            <p style="margin-bottom: 10px; color: #666;">Test card: 4084084084084081</p>
+            <button onclick="testPaystack()">Check Paystack Key</button>
+            <div id="paystack-result"></div>
+        </div>
+
+        <!-- Test 5: Full Flow Simulation -->
+        <div class="test-section">
+            <h2>5. Full Payment Flow Simulation</h2>
+            <button onclick="simulateFullFlow()">Simulate Transfer</button>
+            <div id="flow-result"></div>
+        </div>
+    </div>
+
+    <script>
+        // Test 1: Environment Variables
+        function testEnvVars() {
+            const result = document.getElementById('env-result');
+            result.innerHTML = '<div class="status pending">Checking...</div>';
+            
+            const vars = {
+                'VITE_SUPABASE_URL': import.meta.env?.VITE_SUPABASE_URL || 'Not set',
+                'VITE_SUPABASE_ANON_KEY': import.meta.env?.VITE_SUPABASE_ANON_KEY ? '✓ Set' : 'Not set',
+                'VITE_PAYSTACK_PUBLIC_KEY': import.meta.env?.VITE_PAYSTACK_PUBLIC_KEY ? '✓ Set' : 'Not set'
+            };
+            
+            const allSet = Object.values(vars).every(v => v !== 'Not set');
+            const status = allSet ? 'success' : 'error';
+            
+            result.innerHTML = `
+                <div class="status ${status}">${allSet ? '✅ All variables set' : '❌ Missing variables'}</div>
+                <div class="result">${JSON.stringify(vars, null, 2)}</div>
+            `;
+        }
+
+        // Test 2: Supabase Connection
+        async function testSupabase() {
+            const result = document.getElementById('supabase-result');
+            result.innerHTML = '<div class="status pending">Testing connection...</div>';
+            
+            try {
+                const url = import.meta.env?.VITE_SUPABASE_URL;
+                const key = import.meta.env?.VITE_SUPABASE_ANON_KEY;
+                
+                if (!url || !key) {
+                    throw new Error('Supabase credentials not configured');
+                }
+                
+                const response = await fetch(`${url}/rest/v1/`, {
+                    headers: {
+                        'apikey': key,
+                        'Authorization': `Bearer ${key}`
+                    }
+                });
+                
+                if (response.ok) {
+                    result.innerHTML = `
+                        <div class="status success">✅ Connected to Supabase</div>
+                        <div class="result">Status: ${response.status}\nURL: ${url}</div>
+                    `;
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="status error">❌ Connection failed</div>
+                    <div class="result">Error: ${error.message}</div>
+                `;
+            }
+        }
+
+        // Test 3: Commission Calculator
+        function calculateCommission() {
+            const result = document.getElementById('commission-result');
+            const amount = parseFloat(document.getElementById('transfer-amount').value) || 0;
+            
+            if (amount <= 0) {
+                result.innerHTML = '<div class="status error">❌ Please enter a valid amount</div>';
+                return;
+            }
+            
+            const commission = amount * 0.015; // 1.5%
+            const total = amount + commission;
+            
+            result.innerHTML = `
+                <div class="status success">✅ Calculation complete</div>
+                <div class="result">Transfer Amount: ₦${amount.toLocaleString()}
+Commission (1.5%): ₦${commission.toLocaleString()}
+Total Deducted: ₦${total.toLocaleString()}
+Recipient Receives: ₦${amount.toLocaleString()}
+
+Beneficiary: Alaska Mega Plus Ltd
+Bank: Taj Bank
+Account: 0013010127</div>
+            `;
+        }
+
+        // Test 4: Paystack
+        function testPaystack() {
+            const result = document.getElementById('paystack-result');
+            const key = import.meta.env?.VITE_PAYSTACK_PUBLIC_KEY;
+            
+            if (!key) {
+                result.innerHTML = '<div class="status error">❌ Paystack key not configured</div>';
+                return;
+            }
+            
+            const isTestKey = key.startsWith('pk_test_');
+            const isLiveKey = key.startsWith('pk_live_');
+            
+            result.innerHTML = `
+                <div class="status ${isTestKey || isLiveKey ? 'success' : 'error'}">
+                    ${isTestKey || isLiveKey ? '✅ Valid Paystack key' : '❌ Invalid key format'}
+                </div>
+                <div class="result">Key Type: ${isTestKey ? 'Test Mode' : isLiveKey ? 'Live Mode' : 'Unknown'}
+Format: ${key.substring(0, 15)}...
+
+Test Card Details:
+Card: 4084084084084081
+Expiry: 12/25
+CVV: 408
+PIN: 0000
+OTP: 123456</div>
+            `;
+        }
+
+        // Test 5: Full Flow Simulation
+        function simulateFullFlow() {
+            const result = document.getElementById('flow-result');
+            result.innerHTML = '<div class="status pending">Simulating payment flow...</div>';
+            
+            setTimeout(() => {
+                const steps = [
+                    '1. User initiates transfer: ₦1,000',
+                    '2. Calculate commission: ₦15 (1.5%)',
+                    '3. Total to deduct: ₦1,015',
+                    '4. Verify sender balance: ✓ Sufficient',
+                    '5. Deduct from sender wallet: -₦1,015',
+                    '6. Credit recipient wallet: +₦1,000',
+                    '7. Record commission: +₦15',
+                    '8. Update transaction history: ✓',
+                    '9. Send notifications: ✓',
+                    '10. Transfer complete!',
+                    '',
+                    'Commission Details:',
+                    '- Amount: ₦15',
+                    '- Beneficiary: Alaska Mega Plus Ltd',
+                    '- Bank: Taj Bank',
+                    '- Account: 0013010127',
+                    '- Status: Pending settlement'
+                ];
+                
+                result.innerHTML = `
+                    <div class="status success">✅ Simulation complete</div>
+                    <div class="result">${steps.join('\n')}</div>
+                `;
+            }, 2000);
+        }
+
+        // Auto-run on load
+        window.addEventListener('load', () => {
+            console.log('🧪 Alaska Pay Environment Tester loaded');
+            console.log('Click buttons to test each component');
+        });
+    </script>
+</body>
+</html>

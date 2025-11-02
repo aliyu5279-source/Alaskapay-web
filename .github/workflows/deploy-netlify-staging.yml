@@ -1,0 +1,80 @@
+name: Deploy to Netlify Staging
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ steps.deploy.outputs.deploy-url }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests
+        run: npm run test:ci
+        env:
+          CI: true
+      
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          VITE_ENVIRONMENT: staging
+      
+      - name: Deploy to Netlify
+        id: deploy
+        uses: nwtgck/actions-netlify@v2.1
+        with:
+          publish-dir: './dist'
+          production-branch: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: 'Deploy from GitHub Actions - ${{ github.sha }}'
+          enable-pull-request-comment: true
+          enable-commit-comment: true
+          alias: staging
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      
+      - name: Notify Slack
+        if: success()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "✅ Staging Deployment (Netlify)",
+              "blocks": [{
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Staging deployed to Netlify*\n*URL:* ${{ steps.deploy.outputs.deploy-url }}\n*Commit:* ${{ github.sha }}\n*Author:* ${{ github.actor }}"
+                }
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      
+      - name: Notify Discord
+        if: success()
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: 'success'
+          title: '✅ Staging Deployment (Netlify)'
+          url: ${{ steps.deploy.outputs.deploy-url }}

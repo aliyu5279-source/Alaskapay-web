@@ -1,0 +1,41 @@
+# Deliverfile - App Store Metadata Configuration
+
+# App Identifier
+app_identifier("com.alaskapay.app")
+
+# Your Apple ID email
+username(ENV["APPLE_ID"])
+
+# App Store Connect Team ID (if multiple teams)
+# team_id("123456789")
+
+# Metadata and screenshots path
+metadata_path("./fastlane/metadata")
+screenshots_path("./fastlane/screenshots")
+
+# Submission options
+submit_for_review(false) # Set to true to auto-submit after upload
+automatic_release(false) # Set to true for immediate release after approval
+
+# Phased release (7-day gradual rollout)
+phased_release(true)
+
+# App review information
+submission_information({
+  add_id_info_uses_idfa: false,
+  export_compliance_uses_encryption: true,
+  export_compliance_is_exempt: true,
+  export_compliance_encryption_updated: false,
+  export_compliance_app_type: nil,
+  export_compliance_compliance_required: false,
+  content_rights_contains_third_party_content: false,
+  content_rights_has_rights: true
+})
+
+# Precheck options
+precheck_include_in_app_purchases(false)
+
+# Price tier (0 = Free)
+price_tier(0)
+
+# For more options, run: fastlane action deliver

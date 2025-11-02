@@ -1,0 +1,110 @@
+name: Deploy to TestFlight
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'src/**'
+      - 'package.json'
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  deploy-ios:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Sync Capacitor
+        run: npx cap sync ios
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+          bundler-cache: true
+          working-directory: ios/App
+
+      - name: Install Fastlane
+        run: |
+          cd ios/App
+          bundle install
+
+      - name: Decode API Key
+        run: |
+          echo "${{ secrets.APP_STORE_CONNECT_API_KEY }}" | base64 -d > api_key.json
+
+      - name: Deploy to TestFlight
+        run: |
+          cd ios/App
+          bundle exec fastlane beta
+        env:
+          APP_STORE_CONNECT_API_KEY_PATH: ../../api_key.json
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+
+      - name: Record build in database
+        run: |
+          curl -X POST "${{ secrets.VITE_SUPABASE_URL }}/rest/v1/beta_builds" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "version": "${{ github.ref_name }}",
+              "build_number": ${{ github.run_number }},
+              "platform": "ios",
+              "release_notes": "${{ github.event.head_commit.message }}",
+              "status": "processing"
+            }'
+
+      - name: Notify testers
+        run: |
+          curl -X POST "${{ secrets.VITE_SUPABASE_URL }}/functions/v1/notify-beta-testers" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "group": "ios-beta",
+              "platform": "ios",
+              "title": "New TestFlight Build Available",
+              "message": "Version ${{ github.ref_name }} is now available for testing",
+              "action_url": "testflight://open"
+            }'
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "iOS TestFlight Deployment ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*iOS TestFlight Deployment*\nStatus: ${{ job.status }}\nVersion: ${{ github.ref_name }}\nBuild: ${{ github.run_number }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

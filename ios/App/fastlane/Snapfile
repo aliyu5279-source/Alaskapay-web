@@ -1,0 +1,40 @@
+# Snapfile - Screenshot Configuration for Alaska Pay
+
+# List of devices to generate screenshots for
+devices([
+  "iPhone 15 Pro Max",      # 6.7" - Required
+  "iPhone 15 Pro",          # 6.1" - Required
+  "iPhone SE (3rd generation)", # 4.7" - Required
+  "iPad Pro (12.9-inch) (6th generation)", # 12.9" - Required
+  "iPad Pro (11-inch) (4th generation)"    # 11" - Optional
+])
+
+# Languages to generate screenshots for
+languages([
+  "en-US",
+  # Add more languages as needed:
+  # "es-ES",
+  # "fr-FR",
+  # "de-DE"
+])
+
+# The name of the scheme which contains the UI Tests
+scheme("App")
+
+# Output directory
+output_directory("./fastlane/screenshots")
+
+# Clear all previously generated screenshots before creating new ones
+clear_previous_screenshots(true)
+
+# Remove the '#' to clear all previously generated screenshots before creating new ones
+# clear_previous_screenshots(true)
+
+# Remove the '#' to set the status bar to 9:41 AM, and show full battery and reception
+# override_status_bar(true)
+
+# Arguments to pass to the app on launch
+# launch_arguments(["-username admin"])
+
+# For more information about all available options run
+# fastlane action snapshot

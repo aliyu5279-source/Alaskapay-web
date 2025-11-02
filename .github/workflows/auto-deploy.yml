@@ -1,0 +1,73 @@
+name: Auto Deploy Alaska Pay
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 🔄 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: 📥 Install dependencies
+        run: npm install --legacy-peer-deps
+      
+      - name: 🔍 Lint code
+        run: npm run lint || true
+      
+      - name: 🔨 Build project
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_PAYSTACK_PUBLIC_KEY: ${{ secrets.VITE_PAYSTACK_PUBLIC_KEY }}
+          VITE_STRIPE_PUBLIC_KEY: ${{ secrets.VITE_STRIPE_PUBLIC_KEY }}
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+      
+      - name: ✅ Verify Build Output
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "❌ Build failed - dist folder not found"
+            exit 1
+          fi
+          echo "✅ Build output verified"
+          ls -lah dist/
+
+
+      - name: 🚀 Deploy to Netlify
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: nwtgck/actions-netlify@v2.1
+        with:
+          publish-dir: './dist'
+          production-deploy: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: |
+            Deploy from GitHub Actions
+            Commit: ${{ github.sha }}
+            Author: ${{ github.actor }}
+          enable-pull-request-comment: true
+          enable-commit-comment: true
+          overwrites-pull-request-comment: true
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        timeout-minutes: 5
+      
+      - name: 🎉 Deployment Success
+        if: success()
+        run: |
+          echo "✅ Deployment successful!"
+          echo "🌐 Site URL: https://alaskapay.netlify.app"
+          echo "📊 Check Netlify: https://app.netlify.com/sites/alaskamega/deploys"

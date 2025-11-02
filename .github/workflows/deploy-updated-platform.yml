@@ -1,0 +1,92 @@
+name: Deploy Updated Alaska Pay Platform
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+          - preview
+
+jobs:
+  deploy-updated-platform:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'production' }}
+    
+    steps:
+      - name: 🔄 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: 📥 Install dependencies
+        run: npm install --legacy-peer-deps
+      
+      - name: 🔍 Pre-deployment checks
+        run: |
+          echo "Checking environment variables..."
+          if [ -z "${{ secrets.VITE_SUPABASE_URL }}" ]; then
+            echo "❌ VITE_SUPABASE_URL not set"
+            exit 1
+          fi
+          echo "✅ Environment variables OK"
+      
+      - name: 🔍 Lint code
+        run: npm run lint || true
+      
+      - name: 🔨 Build project
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_PAYSTACK_PUBLIC_KEY: ${{ secrets.VITE_PAYSTACK_PUBLIC_KEY }}
+          VITE_STRIPE_PUBLIC_KEY: ${{ secrets.VITE_STRIPE_PUBLIC_KEY }}
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+      
+      - name: ✅ Verify build
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "❌ Build failed"
+            exit 1
+          fi
+          echo "✅ Build verified"
+          echo "Build size: $(du -sh dist)"
+      
+      - name: 🚀 Deploy to Netlify
+        uses: nwtgck/actions-netlify@v2.1
+        with:
+          publish-dir: './dist'
+          production-deploy: ${{ github.event.inputs.environment == 'production' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: |
+            🚀 Alaska Pay Platform Update
+            Environment: ${{ github.event.inputs.environment }}
+            Includes: Backup & Recovery System
+            Commit: ${{ github.sha }}
+          enable-pull-request-comment: false
+          enable-commit-comment: true
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        timeout-minutes: 10
+      
+      - name: 🎉 Deployment Complete
+        if: success()
+        run: |
+          echo "✅ Alaska Pay deployed successfully!"
+          echo "🌐 Environment: ${{ github.event.inputs.environment }}"
+          echo "📊 Dashboard: https://app.netlify.com/sites/alaskamega"
+          echo ""
+          echo "🗄️ Next steps:"
+          echo "1. Apply database migrations"
+          echo "2. Configure backup schedules"
+          echo "3. Test backup functionality"

@@ -1,0 +1,31 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAM_ID.com.alaskapay.app",
+        "paths": [
+          "/pay/*",
+          "/referral/*",
+          "/transfer",
+          "/bills/*",
+          "/cards/*",
+          "/promo/*",
+          "/kyc/*",
+          "/support/*"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "TEAM_ID.com.alaskapay.app"
+    ]
+  },
+  "activitycontinuation": {
+    "apps": [
+      "TEAM_ID.com.alaskapay.app"
+    ]
+  }
+}
+

@@ -1,0 +1,109 @@
+# iOS Fastlane Configuration for Alaska Pay
+default_platform(:ios)
+
+platform :ios do
+  desc "Generate screenshots for App Store"
+  lane :screenshots do
+    capture_screenshots(
+      scheme: "App",
+      output_directory: "./fastlane/screenshots",
+      clear_previous_screenshots: true,
+      devices: [
+        "iPhone 15 Pro Max",
+        "iPhone 15 Pro",
+        "iPhone SE (3rd generation)",
+        "iPad Pro (12.9-inch) (6th generation)"
+      ]
+    )
+    frame_screenshots(white: true)
+  end
+
+  desc "Update App Store metadata"
+  lane :metadata do
+    deliver(
+      metadata_path: "./fastlane/metadata",
+      screenshots_path: "./fastlane/screenshots",
+      skip_binary_upload: true,
+      skip_screenshots: false,
+      force: true
+    )
+  end
+
+  desc "Build app without uploading"
+  lane :build do
+    increment_build_number(xcodeproj: "App.xcodeproj")
+    match(type: "appstore", readonly: true)
+    build_app(
+      scheme: "App",
+      workspace: "App.xcworkspace",
+      export_method: "app-store",
+      output_directory: "./build"
+    )
+  end
+
+  desc "Push a new beta build to TestFlight"
+  lane :beta do
+    increment_build_number(xcodeproj: "App.xcodeproj")
+    match(type: "appstore", readonly: true)
+    build_app(
+      scheme: "App",
+      workspace: "App.xcworkspace",
+      export_method: "app-store"
+    )
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      distribute_external: false,
+      notify_external_testers: false,
+      changelog: "Bug fixes and performance improvements"
+    )
+    commit_version_bump(
+      message: "Bump build number [skip ci]",
+      xcodeproj: "App.xcodeproj"
+    )
+  end
+  
+  desc "Deploy to App Store with staged rollout"
+  lane :release do
+    increment_version_number(
+      bump_type: "patch",
+      xcodeproj: "App.xcodeproj"
+    )
+    increment_build_number(xcodeproj: "App.xcodeproj")
+    match(type: "appstore", readonly: true)
+    build_app(
+      scheme: "App",
+      workspace: "App.xcworkspace",
+      export_method: "app-store"
+    )
+    upload_to_app_store(
+      submit_for_review: false,
+      automatic_release: false,
+      phased_release: true,
+      force: true,
+      submission_information: {
+        add_id_info_uses_idfa: false,
+        export_compliance_uses_encryption: true,
+        export_compliance_is_exempt: true
+      }
+    )
+    commit_version_bump(
+      message: "Release version bump [skip ci]",
+      xcodeproj: "App.xcodeproj"
+    )
+  end
+
+  desc "Run tests"
+  lane :test do
+    run_tests(
+      scheme: "App",
+      devices: ["iPhone 15 Pro"]
+    )
+  end
+
+  error do |lane, exception|
+    notification(
+      subtitle: "Error in lane #{lane}",
+      message: exception.message
+    )
+  end
+end

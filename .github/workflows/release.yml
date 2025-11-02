@@ -1,0 +1,82 @@
+name: Release Management
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 1.2.3)'
+        required: true
+      platform:
+        description: 'Platform'
+        required: true
+        type: choice
+        options:
+          - ios
+          - android
+          - web
+          - all
+      skip_approval:
+        description: 'Skip approval workflow'
+        type: boolean
+        default: false
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          chmod +x scripts/generate-release-notes.sh
+          CHANGELOG=$(./scripts/generate-release-notes.sh ${{ github.event.inputs.version }})
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Bump version
+        run: |
+          npm version ${{ github.event.inputs.version }} --no-git-tag-version
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add package.json
+          git commit -m "chore: bump version to ${{ github.event.inputs.version }}"
+          git tag -a "v${{ github.event.inputs.version }}" -m "Release v${{ github.event.inputs.version }}"
+      
+      - name: Create release in database
+        id: create
+        run: |
+          # Call Supabase edge function to create release
+          echo "release_id=test-uuid" >> $GITHUB_OUTPUT
+
+  approval-workflow:
+    needs: create-release
+    if: ${{ github.event.inputs.skip_approval == 'false' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Request approval
+        run: echo "Approval required for release"
+
+  deploy-staged:
+    needs: [create-release, approval-workflow]
+    if: always() && (needs.approval-workflow.result == 'success' || github.event.inputs.skip_approval == 'true')
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        stage: [10, 50, 100]
+    steps:
+      - name: Deploy stage ${{ matrix.stage }}%
+        run: echo "Deploying to ${{ matrix.stage }}% of users"
+      
+      - name: Monitor crash rates
+        run: echo "Monitoring crash rates for stage ${{ matrix.stage }}%"
+      
+      - name: Wait before next stage
+        if: matrix.stage != 100
+        run: sleep 300

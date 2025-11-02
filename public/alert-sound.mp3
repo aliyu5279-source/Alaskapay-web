@@ -1,0 +1,2 @@
+// This is a placeholder. In production, add an actual MP3 alert sound file here.
+// For now, the audio element will gracefully fail and alerts will still work visually.

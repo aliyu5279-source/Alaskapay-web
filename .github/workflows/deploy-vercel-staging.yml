@@ -1,0 +1,76 @@
+name: Deploy to Vercel Staging
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ steps.deploy.outputs.preview-url }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests
+        run: npm run test:ci
+        env:
+          CI: true
+      
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          VITE_ENVIRONMENT: staging
+      
+      - name: Deploy to Vercel
+        id: deploy
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--env VITE_ENVIRONMENT=staging'
+          alias-domains: staging.alaskapay.app
+      
+      - name: Notify Slack Success
+        if: success()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "✅ Staging Deployment Successful",
+              "blocks": [{
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Staging deployed successfully*\n*URL:* ${{ steps.deploy.outputs.preview-url }}\n*Commit:* ${{ github.sha }}\n*Author:* ${{ github.actor }}"
+                }
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      
+      - name: Notify Discord
+        if: success()
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: 'success'
+          title: '✅ Staging Deployment'
+          description: 'Deployed to ${{ steps.deploy.outputs.preview-url }}'
+          url: ${{ steps.deploy.outputs.preview-url }}

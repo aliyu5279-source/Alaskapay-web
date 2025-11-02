@@ -1,0 +1,16 @@
+# Appfile - Fastlane Configuration
+
+# Your Apple ID
+apple_id(ENV["APPLE_ID"] || "dev@alaskapay.com")
+
+# App Identifier
+app_identifier("com.alaskapay.app")
+
+# Team ID (optional, if you have multiple teams)
+# team_id("TEAM_ID_HERE")
+
+# iTunes Connect Team ID (if different from Developer Portal)
+# itc_team_id("ITC_TEAM_ID_HERE")
+
+# For more information about the Appfile, see:
+# https://docs.fastlane.tools/advanced/#appfile

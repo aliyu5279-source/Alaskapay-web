@@ -1,0 +1,33 @@
+{
+  "name": "@alaskapay/env-sync",
+  "version": "1.0.0",
+  "description": "CLI tool for syncing environment variables across platforms",
+  "main": "env-sync.js",
+  "bin": {
+    "env-sync": "./env-sync.js"
+  },
+  "scripts": {
+    "test": "jest",
+    "link": "npm link"
+  },
+  "keywords": [
+    "environment",
+    "variables",
+    "sync",
+    "netlify",
+    "vercel",
+    "cli"
+  ],
+  "author": "AlaskaPay",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
+    "dotenv": "^16.3.1",
+    "inquirer": "^8.2.5"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

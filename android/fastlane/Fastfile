@@ -1,0 +1,58 @@
+# Android Fastlane Configuration for Alaska Pay
+default_platform(:android)
+
+platform :android do
+  desc "Generate screenshots for Play Store"
+  lane :screenshots do
+    gradle(task: "assembleDebug assembleAndroidTest")
+    screengrab(
+      locales: ["en-US"],
+      clear_previous_screenshots: true,
+      output_directory: "./fastlane/metadata/android",
+      app_apk_path: "app/build/outputs/apk/debug/app-debug.apk",
+      tests_apk_path: "app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+    )
+  end
+
+  desc "Update Play Store metadata"
+  lane :metadata do
+    upload_to_play_store(
+      track: "production",
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_screenshots: false,
+      skip_upload_images: false,
+      metadata_path: "./fastlane/metadata/android"
+    )
+  end
+
+  desc "Deploy to Internal Testing"
+  lane :internal do
+    increment_version_code(gradle_file_path: "app/build.gradle")
+    gradle(task: "bundle", build_type: "Release")
+    upload_to_play_store(track: "internal", aab: "app/build/outputs/bundle/release/app-release.aab")
+  end
+  
+  desc "Deploy to Production with staged rollout"
+  lane :production do
+    gradle(task: "bundle", build_type: "Release")
+    upload_to_play_store(
+      track: "production",
+      aab: "app/build/outputs/bundle/release/app-release.aab",
+      rollout: "0.1",
+      skip_upload_metadata: false,
+      skip_upload_images: false,
+      skip_upload_screenshots: false
+    )
+  end
+
+  desc "Update rollout percentage"
+  lane :update_rollout do |options|
+    upload_to_play_store(
+      track: "production",
+      rollout: options[:percentage],
+      skip_upload_apk: true,
+      skip_upload_aab: true
+    )
+  end
+end

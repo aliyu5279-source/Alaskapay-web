@@ -1,0 +1,146 @@
+name: Auto Deploy iOS
+
+on:
+  push:
+    tags:
+      - 'ios-v*.*.*'        # Production: ios-v1.0.0
+      - 'ios-beta-v*.*.*'   # Beta: ios-beta-v1.0.0-1
+  
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: 'Fastlane lane'
+        required: true
+        default: 'beta'
+        type: choice
+        options:
+          - beta
+          - release
+          - screenshots
+          - metadata
+      skip_tests:
+        description: 'Skip tests'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  deploy-ios:
+    runs-on: macos-13
+    timeout-minutes: 60
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests
+        if: ${{ !inputs.skip_tests }}
+        run: npm test -- --passWithNoTests
+      
+      - name: Build web app
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      
+      - name: Sync Capacitor
+        run: npx cap sync ios
+      
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: ios/App
+      
+      - name: Install Fastlane
+        run: |
+          cd ios/App
+          bundle install
+      
+      - name: Setup App Store Connect API Key
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "${{ secrets.APP_STORE_CONNECT_API_KEY }}" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_KEY_ID }}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_KEY_ID }}.p8
+      
+      - name: Setup Match Git SSH
+        if: env.MATCH_GIT_URL != ''
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.MATCH_GIT_PRIVATE_KEY }}" > ~/.ssh/match_deploy_key
+          chmod 600 ~/.ssh/match_deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git config --global core.sshCommand "ssh -i ~/.ssh/match_deploy_key -o IdentitiesOnly=yes"
+        env:
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+      
+      - name: Determine lane from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        id: determine_lane
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          if [[ $TAG == ios-beta-* ]]; then
+            echo "lane=beta" >> $GITHUB_OUTPUT
+          elif [[ $TAG == ios-v* ]]; then
+            echo "lane=release" >> $GITHUB_OUTPUT
+          else
+            echo "lane=beta" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Run Fastlane
+        run: |
+          cd ios/App
+          LANE="${{ steps.determine_lane.outputs.lane || inputs.lane || 'beta' }}"
+          echo "Running lane: $LANE"
+          bundle exec fastlane $LANE
+        env:
+          FASTLANE_USER: ${{ secrets.APPLE_ID }}
+          FASTLANE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_PATH: ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_KEY_ID }}.p8
+          DELIVER_ITMSTRANSPORTER_ADDITIONAL_UPLOAD_PARAMETERS: "-t DAV"
+      
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-${{ github.run_number }}
+          path: |
+            ios/App/*.ipa
+            ios/App/fastlane/screenshots
+            ios/App/fastlane/reports
+            ios/App/fastlane/logs
+          retention-days: 30
+      
+      - name: Upload to TestFlight success
+        if: success() && (steps.determine_lane.outputs.lane == 'beta' || inputs.lane == 'beta')
+        run: |
+          echo "✅ Build uploaded to TestFlight successfully!"
+          echo "Check App Store Connect for processing status"
+      
+      - name: Create GitHub Release
+        if: success() && startsWith(github.ref, 'refs/tags/ios-v')
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            ios/App/*.ipa

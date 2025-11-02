@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    container_name: alaskapay-app
+
+  # Development service with hot reload
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    command: npm run dev -- --host
+    container_name: alaskapay-dev
+    profiles:
+      - dev

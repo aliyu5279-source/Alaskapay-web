@@ -1,0 +1,16 @@
+# Deep Link Redirects
+/pay/*           /index.html   200
+/referral/*      /index.html   200
+/transfer        /index.html   200
+/bills/*         /index.html   200
+/cards/*         /index.html   200
+/promo/*         /index.html   200
+/kyc/*           /index.html   200
+/support/*       /index.html   200
+
+# API Redirects
+/api/*           https://psafbcbhbidnbzfsccsu.supabase.co/:splat  200
+
+# SPA Fallback
+/*               /index.html   200
+
